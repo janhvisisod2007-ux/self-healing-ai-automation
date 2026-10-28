@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Self-Healing Automation</title>
+<style>
+  :root { --bg:#0f172a; --card:#1e293b; --line:#334155; --text:#e2e8f0; --mute:#94a3b8;
+          --green:#22c55e; --red:#ef4444; --amber:#f59e0b; --blue:#3b82f6; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family: system-ui, "Segoe UI", sans-serif; }
+  .wrap { max-width:1000px; margin:0 auto; padding:24px 16px 60px; }
+  header { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; }
+  h1 { margin:0; font-size:24px; } h1 span { color:var(--green); }
+  .sub { color:var(--mute); font-size:14px; margin-top:4px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; margin-top:16px; }
+  h3 { margin:0 0 12px; font-size:13px; letter-spacing:.08em; text-transform:uppercase; color:var(--mute); }
+  button { background:#334155; color:var(--text); border:1px solid var(--line); border-radius:8px;
+           padding:9px 14px; margin:3px; cursor:pointer; font-size:14px; transition:.15s; }
+  button:hover:not(:disabled) { background:#475569; } button:disabled { opacity:.5; cursor:wait; }
+  .primary { background:var(--blue); border-color:var(--blue); }
+  .danger { color:#fca5a5; }
+  .toggle { margin-left:10px; font-size:14px; color:var(--mute); }
+  textarea { width:100%; background:#0f172a; color:var(--text); border:1px solid var(--line); border-radius:8px;
+             padding:12px; font-family:ui-monospace, Consolas, monospace; font-size:13px; resize:vertical; }
+  .pipe { display:flex; align-items:stretch; gap:6px; }
+  .step { flex:1; text-align:center; padding:18px 8px; border-radius:12px; border:2px solid var(--line); background:#0f172a; transition:.3s; }
+  .step .ico { font-size:26px; } .step .nm { font-weight:600; margin-top:6px; font-size:14px; }
+  .step .st { font-size:12px; margin-top:4px; text-transform:uppercase; letter-spacing:.06em; color:var(--mute); }
+  .step.success { border-color:var(--green); background:#052e16; } .step.success .st { color:var(--green); }
+  .step.failed { border-color:var(--red); background:#450a0a; animation:pulse 1s infinite; } .step.failed .st { color:var(--red); }
+  .arr { align-self:center; color:var(--mute); font-size:20px; }
+  @keyframes pulse { 50% { box-shadow:0 0 0 6px rgba(239,68,68,.25); } }
+  #box { display:none; border-color:var(--amber); } #box h3 { color:var(--amber); }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  @media(max-width:700px){ .grid{grid-template-columns:1fr;} .pipe{flex-direction:column;} .arr{transform:rotate(90deg);} }
+  pre { margin:0; background:#0f172a; border:1px solid var(--line); padding:12px; border-radius:8px; white-space:pre-wrap; font-size:13px; max-height:260px; overflow:auto; }
+  .tw { overflow-x:auto; } table { width:100%; border-collapse:collapse; font-size:13px; }
+  th { text-align:left; color:var(--mute); font-weight:600; padding:8px; border-bottom:1px solid var(--line); }
+  td { padding:8px; border-bottom:1px solid #263449; }
+  .badge { padding:2px 8px; border-radius:99px; font-size:12px; font-weight:600; }
+  .b-auto { background:#052e16; color:var(--green); } .b-approved { background:#172554; color:#93c5fd; }
+  .b-human { background:#451a03; color:var(--amber); } .empty { color:var(--mute); padding:10px 8px; }
+  .ev { padding:8px 12px; border-left:3px solid var(--line); margin:8px 0; background:#0f172a; border-radius:0 8px 8px 0; font-size:14px; }
+  .ev.bad { border-color:var(--red); } .ev.good { border-color:var(--green); }
+  .ev code { background:#1e293b; padding:1px 6px; border-radius:4px; }
+  .mute { color:var(--mute); }
+  .diff { margin-top:8px; font-family:ui-monospace, Consolas, monospace; font-size:13px; }
+  .df { padding:2px 8px; }
+  .df.del { background:#450a0a; color:#fca5a5; } .df.add { background:#052e16; color:#86efac; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>🛠️ Self-Healing <span>Automation</span></h1>
+      <div class="sub">AI monitors the workflow, finds the root cause, fixes the payload and retries.</div>
+    </div>
+    <button class="danger" onclick="post('/api/reset')">↺ Reset demo</button>
+  </header>
+
+  <div class="card">
+    <h3>Inject a failure (random customer every time)</h3>
+    <button onclick="run('ok')">✅ Normal order</button>
+    <button onclick="run('rename')">✏️ Field renamed</button>
+    <button onclick="run('bad_amount')">🔢 Wrong data type</button>
+    <button onclick="run('missing_email')">📭 Missing email</button>
+    <label class="toggle"><input type="checkbox" id="auto" checked> Auto-heal</label>
+  </div>
+
+  <div class="card">
+    <h3>Custom order — edit the data yourself</h3>
+    <textarea id="custom" rows="7" spellcheck="false"></textarea>
+    <div style="margin-top:8px">
+      <button onclick="randomOrder()">🎲 New random order</button>
+      <button class="primary" onclick="runCustom()">▶ Run this order</button>
+      <span id="jsonErr" style="color:#fca5a5;font-size:13px"></span>
+    </div>
+    <div class="mute" style="font-size:12px;margin-top:6px">
+      Try: delete "phone", rename it to "phone_no", write "abc" in amount, remove "@" from email, then click Run.
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Workflow</h3>
+    <div class="pipe" id="steps"></div>
+    <div style="margin-top:14px"><button class="primary" onclick="heal()">🧠 Diagnose &amp; Heal</button></div>
+  </div>
+
+  <div class="card" id="story" style="display:none">
+    <h3>What happened</h3>
+    <div id="storyBody"></div>
+  </div>
+
+  <div class="card" id="box">
+    <h3>AI diagnosis</h3>
+    <p id="diag" style="margin:0 0 10px"></p>
+    <pre id="fix"></pre>
+    <div style="margin-top:10px"><button class="primary" id="approveBtn" onclick="approve()">✅ Approve fix</button></div>
+  </div>
+
+  <div class="grid">
+    <div class="card"><h3>Payload</h3><pre id="payload"></pre></div>
+    <div class="card"><h3>Live log</h3><pre id="log"></pre></div>
+  </div>
+
+  <div class="card"><h3>Failure history</h3><div class="tw"><table id="hist"></table></div></div>
+  <div class="card"><h3>CRM records</h3><div class="tw"><table id="crm"></table></div></div>
+</div>
+
+<script>
+const ICONS = ["🧾", "📄", "✉️", "🗂️"];
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+async function post(url, body) {
+  const btns = document.querySelectorAll("button");
+  btns.forEach(b => b.disabled = true);
+  try {
+    const r = await fetch(url, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify(body || {}) });
+    const data = await r.json();
+    render(data);
+    return data;
+  } finally {
+    btns.forEach(b => b.disabled = false);
+    loadHistory(); loadCrm();
+  }
+}
+
+async function autoHeal() {
+  if (document.getElementById("auto").checked) {
+    await sleep(1500); // laal step dikhne do
+    await heal();
+  }
+}
+
+async function run(type) {
+  const data = await post("/api/run", { type });
+  fillEditor(data);
+  await autoHeal();
+}
+
+async function runCustom() {
+  const err = document.getElementById("jsonErr");
+  let payload;
+  try {
+    payload = JSON.parse(document.getElementById("custom").value);
+  } catch (e) {
+    err.textContent = "Invalid JSON: " + e.message;
+    return;
+  }
+  if (typeof payload !== "object" || payload === null || Array.isArray(payload)) {
+    err.textContent = "Order must be a JSON object { ... }";
+    return;
+  }
+  err.textContent = "";
+  await post("/api/run", { type: "custom", payload });
+  await autoHeal();
+}
+
+async function randomOrder() {
+  const o = await (await fetch("/api/sample?type=ok")).json();
+  document.getElementById("custom").value = JSON.stringify(o, null, 2);
+  document.getElementById("jsonErr").textContent = "";
+}
+
+function fillEditor(s) {
+  if (s && s.original) document.getElementById("custom").value = JSON.stringify(s.original, null, 2);
+}
+
+const heal = () => post("/api/diagnose");
+const approve = () => post("/api/approve");
+
+function esc(v) {
+  return String(v).replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+}
+
+function diffHtml(before, after) {
+  const keys = [...new Set([...Object.keys(before), ...Object.keys(after)])];
+  return keys.map(k => {
+    const inB = k in before, inA = k in after;
+    const b = JSON.stringify(before[k]), a = JSON.stringify(after[k]);
+    if (inB && !inA) return `<div class="df del">- "${esc(k)}": ${esc(b)}</div>`;
+    if (!inB && inA) return `<div class="df add">+ "${esc(k)}": ${esc(a)}</div>`;
+    if (b !== a) return `<div class="df del">- "${esc(k)}": ${esc(b)}</div><div class="df add">+ "${esc(k)}": ${esc(a)}</div>`;
+    return `<div class="df">&nbsp; "${esc(k)}": ${esc(b)}</div>`;
+  }).join("");
+}
+
+function renderStory(s) {
+  const box = document.getElementById("story");
+  const f = s.lastFix;
+  if (!f) { box.style.display = "none"; return; }
+  box.style.display = "block";
+  const secs = s.recoveredAt ? ((s.recoveredAt - s.failedAt) / 1000).toFixed(1) : null;
+  document.getElementById("storyBody").innerHTML = `
+    <div class="ev bad"><b>1. Detected</b> — ${esc(f.step)} failed: <code>${esc(f.error)}</code></div>
+    <div class="ev"><b>2. Diagnosed</b> — ${esc(f.root_cause)} <span class="mute">(confidence ${f.confidence})</span></div>
+    <div class="ev"><b>3. Fix proposed</b> — ${esc(f.explanation || "")}
+      <div class="diff">${diffHtml(f.before, f.after)}</div></div>
+    <div class="ev"><b>4. Validated</b> — fix passed schema check
+      <span class="mute">(${f.mode === "auto" ? "low risk, applied automatically" : "approved by a human"})</span></div>
+    <div class="ev ${f.ok ? "good" : "bad"}"><b>5. Retried</b> — ${f.ok ? "workflow completed" + (secs ? " in " + secs + " sec" : "") : "retry failed"}</div>`;
+}
+
+function render(s) {
+  document.getElementById("steps").innerHTML = s.steps.map((x, i) =>
+    `<div class="step ${x.status}"><div class="ico">${ICONS[i] || "⚙️"}</div><div class="nm">${x.name}</div><div class="st">${x.status}</div></div>`
+  ).join('<div class="arr">→</div>');
+  document.getElementById("payload").textContent = JSON.stringify(s.payload, null, 2);
+
+  let log = s.log.join("\n");
+  if (s.recoveredAt) log += `\n⏱ Recovered in ${((s.recoveredAt - s.failedAt) / 1000).toFixed(1)} sec`;
+  document.getElementById("log").textContent = log;
+
+  const box = document.getElementById("box");
+  if (s.proposal) {
+    box.style.display = "block";
+    document.getElementById("diag").textContent =
+      `${s.proposal.root_cause} (confidence ${s.proposal.confidence}) - ${s.proposal.explanation}`;
+    document.getElementById("fix").textContent = s.proposal.fixed_payload
+      ? JSON.stringify(s.proposal.fixed_payload, null, 2)
+      : "No safe automatic fix. Required data is missing: escalated to a human.";
+    document.getElementById("approveBtn").style.display = s.proposal.needsHuman ? "none" : "inline-block";
+  } else box.style.display = "none";
+
+  renderStory(s);
+}
+
+async function loadHistory() {
+  const rows = await (await fetch("/api/history")).json();
+  document.getElementById("hist").innerHTML = rows.length
+    ? "<tr><th>Time</th><th>Step</th><th>Error</th><th>Root cause</th><th>Mode</th><th>Outcome</th><th>Recovery</th></tr>" +
+      rows.map(r => `<tr><td>${r.time}</td><td>${esc(r.step)}</td><td>${esc(r.error)}</td><td>${esc(r.root_cause)}</td>
+        <td><span class="badge b-${r.mode}">${r.mode}</span></td><td>${r.outcome}</td><td>${r.seconds ? r.seconds + "s" : "-"}</td></tr>`).join("")
+    : '<tr><td class="empty">No failures yet.</td></tr>';
+}
+
+async function loadCrm() {
+  const rows = await (await fetch("/api/crm")).json();
+  document.getElementById("crm").innerHTML = rows.length
+    ? "<tr><th>Saved at</th><th>Name</th><th>Email</th><th>Phone</th><th>Amount</th></tr>" +
+      rows.map(r => `<tr><td>${r.savedAt}</td><td>${esc(r.name)}</td><td>${esc(r.email)}</td><td>${esc(r.phone)}</td><td>₹${r.amount}</td></tr>`).join("")
+    : '<tr><td class="empty">No customer records yet. A fixed order will appear here.</td></tr>';
+}
+
+fetch("/api/state").then(r => r.json()).then(render);
+loadHistory(); loadCrm(); randomOrder();
+</script>
+</body>
+</html>
