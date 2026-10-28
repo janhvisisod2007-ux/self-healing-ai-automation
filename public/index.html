@@ -140,11 +140,25 @@ async function run(type) {
   await autoHeal();
 }
 
+function parseLenient(text) {
+  try { return JSON.parse(text); } catch (e) {}
+  // har line dekho: jo value valid JSON nahi hai, use quotes me daal do
+  const fixed = text.split("\n").map(line => {
+    const m = line.match(/^(\s*"[^"]+"\s*:\s*)(.+?)(,?)\s*$/);
+    if (!m) return line;
+    const val = m[2].trim();
+    try { JSON.parse(val); return line; }
+    catch (e) { return `${m[1]}${JSON.stringify(val)}${m[3]}`; }
+  }).join("\n");
+  return JSON.parse(fixed);
+}
+
 async function runCustom() {
   const err = document.getElementById("jsonErr");
   let payload;
   try {
-    payload = JSON.parse(document.getElementById("custom").value);
+    payload = parseLenient(document.getElementById("custom").value);
+document.getElementById("custom").value = JSON.stringify(payload, null, 2);
   } catch (e) {
     err.textContent = "Invalid JSON: " + e.message;
     return;
